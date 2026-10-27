@@ -91,33 +91,31 @@ Four columns, in this order, with these exact labels in the UI:
 
 ## 8. Team
 
-Fill these in before tagging `prd-done`:
+This is an individual project, so all development work will be completed by one developer.
 
-| Slot | Name | GitHub handle |
-|---|---|---|
-| Teammate A | `<TODO>` | `<TODO>` |
-| Teammate B | `<TODO>` | `<TODO>` |
-| Teammate C | `<TODO>` | `<TODO>` |
+| Slot       | Name     | GitHub handle |
+|------------|----------|---------------|
+| Developer  | `Ben`    | `bensiegal`   |
 
-These three names become the **only** allowed values for `Task.assignee`. No auth — just a dropdown.
+
+All milestones and tracks are owned by the solo developer. The assignee field in the application can use the developer’s name. The prototype does not need multi-user accounts or team handoffs.
 
 ## 9. Milestone ownership
 
-Fill in the owner column. Recommended default in **bold**; change if your team has different strengths.
 
 | # | Tag | Title | Suggested owner | Final owner |
-|---|---|---|---|---|
-| 3 | `design-done` | Design system + voice (DESIGN.md) | **B** | `<TODO>` |
-| 4 | `data-model` | Task model + board view | **A** | `<TODO>` |
-| 5 | `crud-modal` | Add / edit / delete modal | **A** | `<TODO>` |
-| 6 | `tag-style` | Feature / bug colors | **B** | `<TODO>` |
-| 7 | `task-owner` | Owner indicator + handoff | **A** | `<TODO>` |
-| 8 | `due-tint` | Due-date color tinting | **B** | `<TODO>` |
-| 9 | `context` | Context field on the task modal | **C** | `<TODO>` |
-| 10 | `copy-prompt` | "Copy as Prompt Context" button | **C** | `<TODO>` |
-| 11 | `anchors` | Deliverable Anchor Board | **B** | `<TODO>` |
-| 12 | `secret-sauce` | The one thing that makes it yours | **C / All** | `<TODO>` |
-| 13 | `pitch-ready` | Demo + pitch rehearsal | **All** | `<TODO>` |
+|---|---|---|---|-------------|
+| 3 | `design-done` | Design system + voice (DESIGN.md) | **B** | `Ben`       |
+| 4 | `data-model` | Task model + board view | **A** | `Ben`       |
+| 5 | `crud-modal` | Add / edit / delete modal | **A** | `Ben`       |
+| 6 | `tag-style` | Feature / bug colors | **B** | `Ben`       |
+| 7 | `task-owner` | Owner indicator + handoff | **A** | `Ben`       |
+| 8 | `due-tint` | Due-date color tinting | **B** | `Ben`       |
+| 9 | `context` | Context field on the task modal | **C** | `Ben`       |
+| 10 | `copy-prompt` | "Copy as Prompt Context" button | **C** | `Ben`       |
+| 11 | `anchors` | Deliverable Anchor Board | **B** | `Ben`       |
+| 12 | `secret-sauce` | The one thing that makes it yours | **C / All** | `Ben`       |
+| 13 | `pitch-ready` | Demo + pitch rehearsal | **All** | `Ben`       |
 
 
 Track A owns the state model and task ownership. Track B owns the visuals (and design — M3 runs parallel to M2 so the team starts Phase 3 with the palette already chosen). Track C owns the differentiator features (M9 + M10 — the context field and the Copy-as-Prompt button) and usually leads on M12 secret-sauce. Put your strongest prompter on Track C.
@@ -143,8 +141,8 @@ Keep the Context field of each real task up to date as you work. By the end of t
 
 Fill in:
 
-- **Team name:** `<TODO>`
-- **Tagline (one sentence):** `<TODO>`
+- **Team name: Ben - bensiegal
+- **Tagline: Keep development tasks, AI context and project deliverables together in one workspace
 - **Tracker URL after deploy:** `<TODO>` (Vercel will give it to you)
 
 ## 12. Out of scope (do not build)
