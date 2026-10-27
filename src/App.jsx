@@ -117,7 +117,6 @@ const INITIAL_TASKS = [
   },
 ];
 
-
 export default function App() {
   // TODO M4 data-model: persist tasks in localStorage.
   const [tasks, setTasks] = useLocalStorage(
@@ -284,13 +283,26 @@ export default function App() {
                       <span className="block text-sm font-medium">
                         {task.title}
                       </span>
+
                             <span className="mt-2 block text-sm leading-5 text-[#B0BCCB]">
                         {task.description || 'No description provided.'}
                       </span>
-                            <span className="mt-3 block text-xs text-[#A5B4FC]">
-                        {task.type === 'bug' ? 'Bug' : 'Feature'}
-                              {' · '}
-                              {task.assignee}
+
+                            {/* M6 tag-style: Feature and Bug badges. */}
+                            <span className="mt-3 flex items-center justify-between gap-2">
+                        <span
+                            className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
+                                task.type === 'bug'
+                                    ? 'bg-[#FDA4AF] text-[#3A1820]'
+                                    : 'bg-[#C4B5FD] text-[#25203A]'
+                            }`}
+                        >
+                          {task.type === 'bug' ? 'BUG' : 'FEATURE'}
+                        </span>
+
+                        <span className="text-xs text-[#B0BCCB]">
+                          {task.assignee}
+                        </span>
                       </span>
                           </button>
                       ))}
@@ -325,6 +337,7 @@ export default function App() {
                   <h2 id="task-modal-title" className="text-xl font-semibold">
                     {editing.id === null ? 'New task' : 'Edit task'}
                   </h2>
+
                   <button
                       type="button"
                       onClick={closeModal}
@@ -337,7 +350,10 @@ export default function App() {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label htmlFor="task-title" className="mb-1 block text-sm font-medium">
+                    <label
+                        htmlFor="task-title"
+                        className="mb-1 block text-sm font-medium"
+                    >
                       Title *
                     </label>
                     <input
@@ -353,7 +369,10 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label htmlFor="task-description" className="mb-1 block text-sm font-medium">
+                    <label
+                        htmlFor="task-description"
+                        className="mb-1 block text-sm font-medium"
+                    >
                       Description
                     </label>
                     <textarea
@@ -369,7 +388,10 @@ export default function App() {
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label htmlFor="task-type" className="mb-1 block text-sm font-medium">
+                      <label
+                          htmlFor="task-type"
+                          className="mb-1 block text-sm font-medium"
+                      >
                         Type
                       </label>
                       <select
@@ -385,7 +407,10 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label htmlFor="task-status" className="mb-1 block text-sm font-medium">
+                      <label
+                          htmlFor="task-status"
+                          className="mb-1 block text-sm font-medium"
+                      >
                         Status
                       </label>
                       <select
@@ -404,7 +429,10 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label htmlFor="task-assignee" className="mb-1 block text-sm font-medium">
+                      <label
+                          htmlFor="task-assignee"
+                          className="mb-1 block text-sm font-medium"
+                      >
                         Owner
                       </label>
                       <select
@@ -423,7 +451,10 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label htmlFor="task-due-date" className="mb-1 block text-sm font-medium">
+                      <label
+                          htmlFor="task-due-date"
+                          className="mb-1 block text-sm font-medium"
+                      >
                         Due date
                       </label>
                       <input
@@ -458,6 +489,7 @@ export default function App() {
                       >
                         Cancel
                       </button>
+
                       <button
                           type="submit"
                           className="rounded-md bg-[#7DD3A7] px-4 py-2 text-sm font-semibold text-[#121820] hover:opacity-90"
