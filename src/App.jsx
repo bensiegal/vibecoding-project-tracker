@@ -118,13 +118,13 @@ const INITIAL_TASKS = [
 ];
 
 export default function App() {
-  // TODO M4 data-model: persist tasks in localStorage.
+  // M4: Persist tasks in localStorage.
   const [tasks, setTasks] = useLocalStorage(
       'vibetracker.tasks',
       INITIAL_TASKS
   );
 
-  // TODO M5 crud-modal: null means the modal is closed.
+  // M5: null means the modal is closed.
   // An object with id: null means we're creating a task.
   const [editing, setEditing] = useState(null);
 
@@ -153,6 +153,7 @@ export default function App() {
       assignee: task.assignee,
       dueDate: task.dueDate || '',
     });
+
     setEditing(task);
   }
 
@@ -223,6 +224,17 @@ export default function App() {
     }));
   }
 
+  // M7: Hand off a task without opening the edit modal.
+  function handleAssigneeChange(taskId, newAssignee) {
+    setTasks((currentTasks) =>
+        currentTasks.map((task) =>
+            task.id === taskId
+                ? { ...task, assignee: newAssignee }
+                : task
+        )
+    );
+  }
+
   return (
       <div className="min-h-screen bg-[#121820] p-6 text-[#F1F5F9]">
         <header className="mb-8">
@@ -274,37 +286,74 @@ export default function App() {
 
                     <div className="space-y-3">
                       {stageTasks.map((task) => (
-                          <button
-                              type="button"
+                          <article
                               key={task.id}
-                              onClick={() => openEditTask(task)}
-                              className="block w-full rounded-md border border-[#465568] bg-[#283545] p-3 text-left hover:border-[#7DD3A7]"
+                              className="rounded-md border border-[#465568] bg-[#283545] p-3 transition-colors hover:border-[#7DD3A7]"
                           >
-                      <span className="block text-sm font-medium">
-                        {task.title}
-                      </span>
-
-                            <span className="mt-2 block text-sm leading-5 text-[#B0BCCB]">
-                        {task.description || 'No description provided.'}
-                      </span>
-
-                            {/* M6 tag-style: Feature and Bug badges. */}
-                            <span className="mt-3 flex items-center justify-between gap-2">
-                        <span
-                            className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
-                                task.type === 'bug'
-                                    ? 'bg-[#FDA4AF] text-[#3A1820]'
-                                    : 'bg-[#C4B5FD] text-[#25203A]'
-                            }`}
-                        >
-                          {task.type === 'bug' ? 'BUG' : 'FEATURE'}
+                            {/* M5: Click the task details to edit the task. */}
+                            <button
+                                type="button"
+                                onClick={() => openEditTask(task)}
+                                className="block w-full text-left"
+                                aria-label={`Edit task: ${task.title}`}
+                            >
+                        <span className="block text-sm font-medium">
+                          {task.title}
                         </span>
 
-                        <span className="text-xs text-[#B0BCCB]">
-                          {task.assignee}
+                              <span className="mt-2 block text-sm leading-5 text-[#B0BCCB]">
+                          {task.description ||
+                              'No description provided.'}
                         </span>
-                      </span>
-                          </button>
+
+                              {/* M6: Feature and Bug badges. */}
+                              <span className="mt-3 flex items-center justify-between gap-2">
+                          <span
+                              className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
+                                  task.type === 'bug'
+                                      ? 'bg-[#FDA4AF] text-[#3A1820]'
+                                      : 'bg-[#C4B5FD] text-[#25203A]'
+                              }`}
+                          >
+                            {task.type === 'bug' ? 'BUG' : 'FEATURE'}
+                          </span>
+
+                                {/* M7: Assignee badge. */}
+                                <span className="inline-flex items-center gap-1 rounded-md border border-[#465568] bg-[#1D2733] px-2 py-1 text-xs text-[#F1F5F9]">
+                            <span aria-hidden="true">👤</span>
+                                  {task.assignee || 'Unassigned'}
+                          </span>
+                        </span>
+                            </button>
+
+                            {/* M7: Hand off to another team member. */}
+                            <div className="mt-3 border-t border-[#465568] pt-3">
+                              <label
+                                  htmlFor={`assignee-${task.id}`}
+                                  className="mb-1 block text-xs font-medium text-[#B0BCCB]"
+                              >
+                                Hand off to...
+                              </label>
+
+                              <select
+                                  id={`assignee-${task.id}`}
+                                  value={task.assignee || ''}
+                                  onChange={(event) =>
+                                      handleAssigneeChange(
+                                          task.id,
+                                          event.target.value
+                                      )
+                                  }
+                                  className="w-full rounded-md border border-[#465568] bg-[#121820] px-2 py-2 text-sm text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
+                              >
+                                {TEAM.map((person) => (
+                                    <option key={person} value={person}>
+                                      {person}
+                                    </option>
+                                ))}
+                              </select>
+                            </div>
+                          </article>
                       ))}
 
                       {stageTasks.length === 0 && (
@@ -334,7 +383,10 @@ export default function App() {
                   className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[#465568] bg-[#1D2733] p-6 shadow-2xl"
               >
                 <div className="mb-6 flex items-center justify-between gap-4">
-                  <h2 id="task-modal-title" className="text-xl font-semibold">
+                  <h2
+                      id="task-modal-title"
+                      className="text-xl font-semibold"
+                  >
                     {editing.id === null ? 'New task' : 'Edit task'}
                   </h2>
 
@@ -356,6 +408,7 @@ export default function App() {
                     >
                       Title *
                     </label>
+
                     <input
                         id="task-title"
                         name="title"
@@ -375,6 +428,7 @@ export default function App() {
                     >
                       Description
                     </label>
+
                     <textarea
                         id="task-description"
                         name="description"
@@ -394,6 +448,7 @@ export default function App() {
                       >
                         Type
                       </label>
+
                       <select
                           id="task-type"
                           name="type"
@@ -413,6 +468,7 @@ export default function App() {
                       >
                         Status
                       </label>
+
                       <select
                           id="task-status"
                           name="status"
@@ -435,6 +491,7 @@ export default function App() {
                       >
                         Owner
                       </label>
+
                       <select
                           id="task-assignee"
                           name="assignee"
@@ -457,6 +514,7 @@ export default function App() {
                       >
                         Due date
                       </label>
+
                       <input
                           id="task-due-date"
                           name="dueDate"
