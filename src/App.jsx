@@ -4,22 +4,16 @@ import { useState, useEffect } from 'react';
 /**
  * Vibecoding Project Tracker — starter scaffold.
  *
- * This file is intentionally almost empty. The boilerplate (Vite, React,
- * Tailwind) is configured for you, plus a few shared constants and a
- * localStorage helper. Everything visible on screen, you build.
- *
- * Where to start (build sequence in Phase 3):
- *   - M4  data-model    : render the four columns and the task cards below.
- *   - M5  crud-modal    : add the "+" button modal and the edit-on-click modal.
- *   - M6  tag-style     : feature vs. bug color coding (uses DESIGN.md §2 colors).
- *   - M7  task-owner    : assignee badge + "Hand off to..." dropdown.
- *   - M8  due-tint      : color cards by due date (uses DESIGN.md §2 due-state colors).
- *   - M9  context       : a curated Context briefing field on the modal.
- *   - M10 copy-prompt   : a "Copy as Prompt Context" button that serializes the task + context.
- *   - M11 anchors       : the Anchor Board above the Kanban.
- *   - M12 secret-sauce  : the one open-ended thing that makes your tracker yours.
- *
- * Search the file for `TODO M<n>` to find the right hook for each milestone.
+ * Milestones:
+ * M4  data-model
+ * M5  crud-modal
+ * M6  tag-style
+ * M7  task-owner
+ * M8  due-tint
+ * M9  context
+ * M10 copy-prompt
+ * M11 anchors
+ * M12 secret-sauce
  */
 
 /**
@@ -30,12 +24,11 @@ import { useState, useEffect } from 'react';
  * @property {'feature'|'bug'} type
  * @property {'todo'|'in-progress'|'review'|'done'} status
  * @property {string} assignee
- * @property {string|null} dueDate ISO 'YYYY-MM-DD'
- * @property {string} createdDate ISO 'YYYY-MM-DD'
+ * @property {string|null} dueDate
+ * @property {string} createdDate
  */
 
 // The four columns of the board, in render order.
-// Use these IDs everywhere — do not invent new ones.
 export const STAGES = [
   { id: 'todo', label: 'To Do' },
   { id: 'in-progress', label: 'In Progress' },
@@ -47,10 +40,7 @@ export const STAGES = [
 export const TEAM = ['Ben'];
 
 /**
- * A tiny localStorage hook — survives reloads, no library needed.
- *
- * Usage:
- *   const [tasks, setTasks] = useLocalStorage('vibetracker.tasks', []);
+ * A tiny localStorage hook — survives reloads.
  */
 export function useLocalStorage(key, initialValue) {
   const [value, setValue] = useState(() => {
@@ -117,6 +107,89 @@ const INITIAL_TASKS = [
   },
 ];
 
+// M8: Return today's date using the user's local calendar,
+// avoiding UTC date shifts near midnight.
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+// M8: Work out the deadline state and its visual treatment.
+function getDueDateInfo(task) {
+  const colors = {
+    safe: '#7DD3FC',
+    warning: '#FCD34D',
+    overdue: '#FDA4AF',
+    neutral: '#A8B3C2',
+  };
+
+  if (!task.dueDate) {
+    return {
+      state: 'neutral',
+      label: 'No due date',
+      color: colors.neutral,
+    };
+  }
+
+  const dueDate = new Date(`${task.dueDate}T00:00:00`);
+  const formattedDate = dueDate.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  // Completed tasks should not be shown as overdue.
+  if (task.status === 'done') {
+    return {
+      state: 'neutral',
+      label: `Due ${formattedDate} · Completed`,
+      color: colors.neutral,
+    };
+  }
+
+  // Compare calendar dates rather than hours.
+  const dueTimestamp = Date.parse(`${task.dueDate}T00:00:00Z`);
+  const todayTimestamp = Date.parse(`${getLocalDateString()}T00:00:00Z`);
+  const daysUntilDue = Math.round(
+      (dueTimestamp - todayTimestamp) / (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    const daysOverdue = Math.abs(daysUntilDue);
+
+    return {
+      state: 'overdue',
+      label: `Overdue by ${daysOverdue} day${daysOverdue === 1 ? '' : 's'}`,
+      color: colors.overdue,
+    };
+  }
+
+  if (daysUntilDue === 0) {
+    return {
+      state: 'warning',
+      label: 'Due today',
+      color: colors.warning,
+    };
+  }
+
+  if (daysUntilDue <= 3) {
+    return {
+      state: 'warning',
+      label: `Due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}`,
+      color: colors.warning,
+    };
+  }
+
+  return {
+    state: 'safe',
+    label: `Due ${formattedDate}`,
+    color: colors.safe,
+  };
+}
+
 export default function App() {
   // M4: Persist tasks in localStorage.
   const [tasks, setTasks] = useLocalStorage(
@@ -174,7 +247,7 @@ export default function App() {
         ...formData,
         title,
         dueDate: formData.dueDate || null,
-        createdDate: new Date().toISOString().slice(0, 10),
+        createdDate: getLocalDateString(),
       };
 
       setTasks((currentTasks) => [...currentTasks, newTask]);
@@ -285,76 +358,107 @@ export default function App() {
                     </div>
 
                     <div className="space-y-3">
-                      {stageTasks.map((task) => (
-                          <article
-                              key={task.id}
-                              className="rounded-md border border-[#465568] bg-[#283545] p-3 transition-colors hover:border-[#7DD3A7]"
-                          >
-                            {/* M5: Click the task details to edit the task. */}
-                            <button
-                                type="button"
-                                onClick={() => openEditTask(task)}
-                                className="block w-full text-left"
-                                aria-label={`Edit task: ${task.title}`}
+                      {stageTasks.map((task) => {
+                        // M8: Calculate the deadline styling for this card.
+                        const dueInfo = getDueDateInfo(task);
+
+                        return (
+                            <article
+                                key={task.id}
+                                className="rounded-md border border-[#465568] bg-[#283545] p-3 transition-colors hover:border-[#7DD3A7]"
+                                style={{
+                                  borderLeftWidth: '4px',
+                                  borderLeftColor: dueInfo.color,
+                                }}
                             >
-                        <span className="block text-sm font-medium">
-                          {task.title}
-                        </span>
+                              {/* M5: Click task details to edit the task. */}
+                              <button
+                                  type="button"
+                                  onClick={() => openEditTask(task)}
+                                  className="block w-full text-left"
+                                  aria-label={`Edit task: ${task.title}`}
+                              >
+                          <span className="block text-sm font-medium">
+                            {task.title}
+                          </span>
 
-                              <span className="mt-2 block text-sm leading-5 text-[#B0BCCB]">
-                          {task.description ||
-                              'No description provided.'}
-                        </span>
+                                <span className="mt-2 block text-sm leading-5 text-[#B0BCCB]">
+                            {task.description ||
+                                'No description provided.'}
+                          </span>
 
-                              {/* M6: Feature and Bug badges. */}
-                              <span className="mt-3 flex items-center justify-between gap-2">
+                                {/* M6: Feature and Bug badges. */}
+                                <span className="mt-3 flex items-center justify-between gap-2">
+                            <span
+                                className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
+                                    task.type === 'bug'
+                                        ? 'bg-[#FDA4AF] text-[#3A1820]'
+                                        : 'bg-[#C4B5FD] text-[#25203A]'
+                                }`}
+                            >
+                              {task.type === 'bug' ? 'BUG' : 'FEATURE'}
+                            </span>
+
+                                  {/* M7: Assignee badge. */}
+                                  <span className="inline-flex items-center gap-1 rounded-md border border-[#465568] bg-[#1D2733] px-2 py-1 text-xs text-[#F1F5F9]">
+                              <span aria-hidden="true">👤</span>
+                                    {task.assignee || 'Unassigned'}
+                            </span>
+                          </span>
+                              </button>
+
+                              {/* M8: Due-date label with state colour. */}
+                              <div className="mt-3">
                           <span
-                              className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
-                                  task.type === 'bug'
-                                      ? 'bg-[#FDA4AF] text-[#3A1820]'
-                                      : 'bg-[#C4B5FD] text-[#25203A]'
-                              }`}
+                              className="inline-flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold"
+                              style={{
+                                backgroundColor: dueInfo.color,
+                                color: '#121820',
+                              }}
                           >
-                            {task.type === 'bug' ? 'BUG' : 'FEATURE'}
+                            <span aria-hidden="true">
+                              {dueInfo.state === 'overdue'
+                                  ? '!'
+                                  : dueInfo.state === 'warning'
+                                      ? '◷'
+                                      : dueInfo.state === 'safe'
+                                          ? '✓'
+                                          : '—'}
+                            </span>
+                            {dueInfo.label}
                           </span>
+                              </div>
 
-                                {/* M7: Assignee badge. */}
-                                <span className="inline-flex items-center gap-1 rounded-md border border-[#465568] bg-[#1D2733] px-2 py-1 text-xs text-[#F1F5F9]">
-                            <span aria-hidden="true">👤</span>
-                                  {task.assignee || 'Unassigned'}
-                          </span>
-                        </span>
-                            </button>
+                              {/* M7: Hand off to another team member. */}
+                              <div className="mt-3 border-t border-[#465568] pt-3">
+                                <label
+                                    htmlFor={`assignee-${task.id}`}
+                                    className="mb-1 block text-xs font-medium text-[#B0BCCB]"
+                                >
+                                  Hand off to...
+                                </label>
 
-                            {/* M7: Hand off to another team member. */}
-                            <div className="mt-3 border-t border-[#465568] pt-3">
-                              <label
-                                  htmlFor={`assignee-${task.id}`}
-                                  className="mb-1 block text-xs font-medium text-[#B0BCCB]"
-                              >
-                                Hand off to...
-                              </label>
-
-                              <select
-                                  id={`assignee-${task.id}`}
-                                  value={task.assignee || ''}
-                                  onChange={(event) =>
-                                      handleAssigneeChange(
-                                          task.id,
-                                          event.target.value
-                                      )
-                                  }
-                                  className="w-full rounded-md border border-[#465568] bg-[#121820] px-2 py-2 text-sm text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
-                              >
-                                {TEAM.map((person) => (
-                                    <option key={person} value={person}>
-                                      {person}
-                                    </option>
-                                ))}
-                              </select>
-                            </div>
-                          </article>
-                      ))}
+                                <select
+                                    id={`assignee-${task.id}`}
+                                    value={task.assignee || ''}
+                                    onChange={(event) =>
+                                        handleAssigneeChange(
+                                            task.id,
+                                            event.target.value
+                                        )
+                                    }
+                                    className="w-full rounded-md border border-[#465568] bg-[#121820] px-2 py-2 text-sm text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
+                                >
+                                  {TEAM.map((person) => (
+                                      <option key={person} value={person}>
+                                        {person}
+                                      </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </article>
+                        );
+                      })}
 
                       {stageTasks.length === 0 && (
                           <p className="rounded-md border border-dashed border-[#465568] p-4 text-sm text-[#B0BCCB]">
