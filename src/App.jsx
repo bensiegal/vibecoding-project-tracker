@@ -117,42 +117,144 @@ const INITIAL_TASKS = [
   },
 ];
 
+
 export default function App() {
-  // TODO M4 data-model:
-  // Store tasks and render cards in the matching status column.
-  const [tasks] = useLocalStorage('vibetracker.tasks', INITIAL_TASKS);
+  // TODO M4 data-model: persist tasks in localStorage.
+  const [tasks, setTasks] = useLocalStorage(
+      'vibetracker.tasks',
+      INITIAL_TASKS
+  );
 
-  // TODO M5 crud-modal:
-  // const [editing, setEditing] = useState(null);
+  // TODO M5 crud-modal: null means the modal is closed.
+  // An object with id: null means we're creating a task.
+  const [editing, setEditing] = useState(null);
 
-  // TODO M11 anchors:
-  // const [anchors, setAnchors] = useLocalStorage('vibetracker.anchors', []);
+  const emptyForm = {
+    title: '',
+    description: '',
+    type: 'feature',
+    status: 'todo',
+    assignee: TEAM[0],
+    dueDate: '',
+  };
+
+  const [formData, setFormData] = useState(emptyForm);
+
+  function openNewTask() {
+    setFormData({ ...emptyForm });
+    setEditing({ id: null });
+  }
+
+  function openEditTask(task) {
+    setFormData({
+      title: task.title,
+      description: task.description,
+      type: task.type,
+      status: task.status,
+      assignee: task.assignee,
+      dueDate: task.dueDate || '',
+    });
+    setEditing(task);
+  }
+
+  function closeModal() {
+    setEditing(null);
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+
+    const title = formData.title.trim();
+
+    if (!title) return;
+
+    if (editing.id === null) {
+      const newTask = {
+        id: `task-${Date.now()}`,
+        ...formData,
+        title,
+        dueDate: formData.dueDate || null,
+        createdDate: new Date().toISOString().slice(0, 10),
+      };
+
+      setTasks((currentTasks) => [...currentTasks, newTask]);
+    } else {
+      setTasks((currentTasks) =>
+          currentTasks.map((task) =>
+              task.id === editing.id
+                  ? {
+                    ...task,
+                    ...formData,
+                    title,
+                    dueDate: formData.dueDate || null,
+                  }
+                  : task
+          )
+      );
+    }
+
+    closeModal();
+  }
+
+  function deleteTask() {
+    if (editing.id === null) {
+      closeModal();
+      return;
+    }
+
+    const confirmed = window.confirm(
+        "Delete this task? You won't be able to restore it."
+    );
+
+    if (!confirmed) return;
+
+    setTasks((currentTasks) =>
+        currentTasks.filter((task) => task.id !== editing.id)
+    );
+
+    closeModal();
+  }
+
+  function updateField(event) {
+    const { name, value } = event.target;
+
+    setFormData((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
 
   return (
       <div className="min-h-screen bg-[#121820] p-6 text-[#F1F5F9]">
         <header className="mb-8">
-          <h1 className="text-2xl font-bold">
-            My project
-          </h1>
+          <h1 className="text-2xl font-bold">My project</h1>
           <p className="mt-2 text-sm text-[#B0BCCB]">
             Keep development tasks, AI context and project
             deliverables together in one workspace.
           </p>
         </header>
 
-        {/* TODO M11 anchors: render the Anchor Board above the Kanban. */}
-
         <main>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              Task board
-            </h2>
-            <span className="text-sm text-[#B0BCCB]">
-            {tasks.length} tasks
-          </span>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Task board</h2>
+              <p className="mt-1 text-sm text-[#B0BCCB]">
+                {tasks.length} tasks
+              </p>
+            </div>
+
+            <button
+                type="button"
+                onClick={openNewTask}
+                className="rounded-md bg-[#7DD3A7] px-4 py-2 text-sm font-semibold text-[#121820] hover:opacity-90"
+            >
+              + New task
+            </button>
           </div>
 
-          {/* TODO M4 data-model: render tasks in the four columns. */}
+          {/* TODO M11 anchors: render the Anchor Board above the Kanban. */}
+
+          {/* M4: Render the four task columns. */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             {STAGES.map((stage) => {
               const stageTasks = tasks.filter(
@@ -165,9 +267,7 @@ export default function App() {
                       className="min-h-64 rounded-lg border border-[#465568] bg-[#1D2733] p-4"
                   >
                     <div className="mb-4 flex items-center justify-between">
-                      <h3 className="font-semibold">
-                        {stage.label}
-                      </h3>
+                      <h3 className="font-semibold">{stage.label}</h3>
                       <span className="rounded-full bg-[#283545] px-2 py-1 text-xs text-[#B0BCCB]">
                     {stageTasks.length}
                   </span>
@@ -175,17 +275,24 @@ export default function App() {
 
                     <div className="space-y-3">
                       {stageTasks.map((task) => (
-                          <article
+                          <button
+                              type="button"
                               key={task.id}
-                              className="rounded-md border border-[#465568] bg-[#283545] p-3"
+                              onClick={() => openEditTask(task)}
+                              className="block w-full rounded-md border border-[#465568] bg-[#283545] p-3 text-left hover:border-[#7DD3A7]"
                           >
-                            <h4 className="text-sm font-medium">
-                              {task.title}
-                            </h4>
-                            <p className="mt-2 text-sm leading-5 text-[#B0BCCB]">
-                              {task.description}
-                            </p>
-                          </article>
+                      <span className="block text-sm font-medium">
+                        {task.title}
+                      </span>
+                            <span className="mt-2 block text-sm leading-5 text-[#B0BCCB]">
+                        {task.description || 'No description provided.'}
+                      </span>
+                            <span className="mt-3 block text-xs text-[#A5B4FC]">
+                        {task.type === 'bug' ? 'Bug' : 'Feature'}
+                              {' · '}
+                              {task.assignee}
+                      </span>
+                          </button>
                       ))}
 
                       {stageTasks.length === 0 && (
@@ -199,6 +306,170 @@ export default function App() {
             })}
           </div>
         </main>
+
+        {/* M5: Create and edit modal. */}
+        {editing !== null && (
+            <div
+                className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget) closeModal();
+                }}
+            >
+              <section
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="task-modal-title"
+                  className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[#465568] bg-[#1D2733] p-6 shadow-2xl"
+              >
+                <div className="mb-6 flex items-center justify-between gap-4">
+                  <h2 id="task-modal-title" className="text-xl font-semibold">
+                    {editing.id === null ? 'New task' : 'Edit task'}
+                  </h2>
+                  <button
+                      type="button"
+                      onClick={closeModal}
+                      aria-label="Close modal"
+                      className="rounded px-2 py-1 text-xl text-[#B0BCCB] hover:bg-[#283545]"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label htmlFor="task-title" className="mb-1 block text-sm font-medium">
+                      Title *
+                    </label>
+                    <input
+                        id="task-title"
+                        name="title"
+                        value={formData.title}
+                        onChange={updateField}
+                        required
+                        autoFocus
+                        className="w-full rounded-md border border-[#465568] bg-[#121820] px-3 py-2 text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
+                        placeholder="e.g. Build the login page"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="task-description" className="mb-1 block text-sm font-medium">
+                      Description
+                    </label>
+                    <textarea
+                        id="task-description"
+                        name="description"
+                        value={formData.description}
+                        onChange={updateField}
+                        rows={3}
+                        className="w-full rounded-md border border-[#465568] bg-[#121820] px-3 py-2 text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
+                        placeholder="What needs to be done?"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="task-type" className="mb-1 block text-sm font-medium">
+                        Type
+                      </label>
+                      <select
+                          id="task-type"
+                          name="type"
+                          value={formData.type}
+                          onChange={updateField}
+                          className="w-full rounded-md border border-[#465568] bg-[#121820] px-3 py-2 text-[#F1F5F9]"
+                      >
+                        <option value="feature">Feature</option>
+                        <option value="bug">Bug</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="task-status" className="mb-1 block text-sm font-medium">
+                        Status
+                      </label>
+                      <select
+                          id="task-status"
+                          name="status"
+                          value={formData.status}
+                          onChange={updateField}
+                          className="w-full rounded-md border border-[#465568] bg-[#121820] px-3 py-2 text-[#F1F5F9]"
+                      >
+                        {STAGES.map((stage) => (
+                            <option key={stage.id} value={stage.id}>
+                              {stage.label}
+                            </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="task-assignee" className="mb-1 block text-sm font-medium">
+                        Owner
+                      </label>
+                      <select
+                          id="task-assignee"
+                          name="assignee"
+                          value={formData.assignee}
+                          onChange={updateField}
+                          className="w-full rounded-md border border-[#465568] bg-[#121820] px-3 py-2 text-[#F1F5F9]"
+                      >
+                        {TEAM.map((person) => (
+                            <option key={person} value={person}>
+                              {person}
+                            </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="task-due-date" className="mb-1 block text-sm font-medium">
+                        Due date
+                      </label>
+                      <input
+                          id="task-due-date"
+                          name="dueDate"
+                          type="date"
+                          value={formData.dueDate}
+                          onChange={updateField}
+                          className="w-full rounded-md border border-[#465568] bg-[#121820] px-3 py-2 text-[#F1F5F9]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap justify-between gap-3 border-t border-[#465568] pt-4">
+                    <div>
+                      {editing.id !== null && (
+                          <button
+                              type="button"
+                              onClick={deleteTask}
+                              className="rounded-md border border-[#FDA4AF] px-3 py-2 text-sm text-[#FDA4AF] hover:bg-[#FDA4AF]/10"
+                          >
+                            Delete task
+                          </button>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                          type="button"
+                          onClick={closeModal}
+                          className="rounded-md border border-[#465568] px-3 py-2 text-sm hover:bg-[#283545]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                          type="submit"
+                          className="rounded-md bg-[#7DD3A7] px-4 py-2 text-sm font-semibold text-[#121820] hover:opacity-90"
+                      >
+                        Save task
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
+            </div>
+        )}
       </div>
   );
 }
