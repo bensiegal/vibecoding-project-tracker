@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 /**
- * Vibecoding Project Tracker — starter scaffold.
+ * Vibecoding Project Tracker
  *
  * Milestones:
  * M4  data-model
@@ -26,6 +26,9 @@ import { useState, useEffect } from 'react';
  * @property {string} assignee
  * @property {string|null} dueDate
  * @property {string} createdDate
+ * @property {string} context
+ * @property {string} contextTool
+ * @property {string|null} contextUpdatedAt
  */
 
 // The four columns of the board, in render order.
@@ -39,8 +42,29 @@ export const STAGES = [
 // This is a solo project, as specified in PRD §8.
 export const TEAM = ['Ben'];
 
+const AI_TOOLS = [
+  'Claude',
+  'ChatGPT',
+  'Cursor',
+  'Lovable',
+  'Replit',
+  'Other',
+];
+
+const CONTEXT_TEMPLATE = `## Background
+What is this task about?
+
+## Constraints
+What requirements or limitations should the AI know about?
+
+## Tried so far
+What have you already tried? What worked or failed?
+
+## Pick up
+What should the AI do next?`;
+
 /**
- * A tiny localStorage hook — survives reloads.
+ * A localStorage hook that persists data across reloads.
  */
 export function useLocalStorage(key, initialValue) {
   const [value, setValue] = useState(() => {
@@ -63,7 +87,7 @@ export function useLocalStorage(key, initialValue) {
   return [value, setValue];
 }
 
-// M4: Seed the board with tasks so it isn't empty on first load.
+// Seed the board with tasks so it isn't empty on first load.
 const INITIAL_TASKS = [
   {
     id: 'task-1',
@@ -74,6 +98,9 @@ const INITIAL_TASKS = [
     assignee: 'Ben',
     dueDate: null,
     createdDate: '2026-10-27',
+    context: '',
+    contextTool: '',
+    contextUpdatedAt: null,
   },
   {
     id: 'task-2',
@@ -84,6 +111,9 @@ const INITIAL_TASKS = [
     assignee: 'Ben',
     dueDate: null,
     createdDate: '2026-10-27',
+    context: '',
+    contextTool: '',
+    contextUpdatedAt: null,
   },
   {
     id: 'task-3',
@@ -94,6 +124,9 @@ const INITIAL_TASKS = [
     assignee: 'Ben',
     dueDate: null,
     createdDate: '2026-10-27',
+    context: '',
+    contextTool: '',
+    contextUpdatedAt: null,
   },
   {
     id: 'task-4',
@@ -104,11 +137,13 @@ const INITIAL_TASKS = [
     assignee: 'Ben',
     dueDate: null,
     createdDate: '2026-10-27',
+    context: '',
+    contextTool: '',
+    contextUpdatedAt: null,
   },
 ];
 
-// M8: Return today's date using the user's local calendar,
-// avoiding UTC date shifts near midnight.
+// Return today's date using the local calendar.
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -117,7 +152,7 @@ function getLocalDateString(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-// M8: Work out the deadline state and its visual treatment.
+// Calculate the deadline state and its visual treatment.
 function getDueDateInfo(task) {
   const colors = {
     safe: '#7DD3FC',
@@ -152,7 +187,10 @@ function getDueDateInfo(task) {
 
   // Compare calendar dates rather than hours.
   const dueTimestamp = Date.parse(`${task.dueDate}T00:00:00Z`);
-  const todayTimestamp = Date.parse(`${getLocalDateString()}T00:00:00Z`);
+  const todayTimestamp = Date.parse(
+      `${getLocalDateString()}T00:00:00Z`
+  );
+
   const daysUntilDue = Math.round(
       (dueTimestamp - todayTimestamp) / (1000 * 60 * 60 * 24)
   );
@@ -190,8 +228,55 @@ function getDueDateInfo(task) {
   };
 }
 
+// M9: Format the last-updated timestamp as a relative time.
+function getRelativeTime(timestamp) {
+  if (!timestamp) {
+    return 'Not updated yet';
+  }
+
+  const updatedAt = new Date(timestamp);
+
+  if (Number.isNaN(updatedAt.getTime())) {
+    return 'Not updated yet';
+  }
+
+  const elapsedSeconds = Math.max(
+      0,
+      Math.floor((Date.now() - updatedAt.getTime()) / 1000)
+  );
+
+  if (elapsedSeconds < 60) {
+    return 'just now';
+  }
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'} ago`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+  if (elapsedHours < 24) {
+    return `${elapsedHours} hour${elapsedHours === 1 ? '' : 's'} ago`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+
+  if (elapsedDays < 30) {
+    return `${elapsedDays} day${elapsedDays === 1 ? '' : 's'} ago`;
+  }
+
+  return updatedAt.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export default function App() {
   // M4: Persist tasks in localStorage.
+  // Keep this key unchanged so existing tasks are preserved.
   const [tasks, setTasks] = useLocalStorage(
       'vibetracker.tasks',
       INITIAL_TASKS
@@ -201,6 +286,7 @@ export default function App() {
   // An object with id: null means we're creating a task.
   const [editing, setEditing] = useState(null);
 
+  // M9: New tasks start with a context briefing template.
   const emptyForm = {
     title: '',
     description: '',
@@ -208,6 +294,9 @@ export default function App() {
     status: 'todo',
     assignee: TEAM[0],
     dueDate: '',
+    context: CONTEXT_TEMPLATE,
+    contextTool: '',
+    contextUpdatedAt: null,
   };
 
   const [formData, setFormData] = useState(emptyForm);
@@ -219,12 +308,15 @@ export default function App() {
 
   function openEditTask(task) {
     setFormData({
-      title: task.title,
-      description: task.description,
-      type: task.type,
-      status: task.status,
-      assignee: task.assignee,
+      title: task.title || '',
+      description: task.description || '',
+      type: task.type || 'feature',
+      status: task.status || 'todo',
+      assignee: task.assignee || TEAM[0],
       dueDate: task.dueDate || '',
+      context: task.context || '',
+      contextTool: task.contextTool || '',
+      contextUpdatedAt: task.contextUpdatedAt || null,
     });
 
     setEditing(task);
@@ -288,12 +380,16 @@ export default function App() {
     closeModal();
   }
 
+  // M9: Editing the Context field automatically updates its timestamp.
   function updateField(event) {
     const { name, value } = event.target;
 
     setFormData((current) => ({
       ...current,
       [name]: value,
+      ...(name === 'context'
+          ? { contextUpdatedAt: new Date().toISOString() }
+          : {}),
     }));
   }
 
@@ -429,6 +525,16 @@ export default function App() {
                           </span>
                               </div>
 
+                              {/* M9: Show whether the task has a context briefing. */}
+                              {task.context?.trim() && (
+                                  <div className="mt-3">
+                            <span className="inline-flex items-center gap-1 rounded-md border border-[#A5B4FC]/40 bg-[#A5B4FC]/10 px-2 py-1 text-xs text-[#C7D2FE]">
+                              <span aria-hidden="true">✦</span>
+                              Context added
+                            </span>
+                                  </div>
+                              )}
+
                               {/* M7: Hand off to another team member. */}
                               <div className="mt-3 border-t border-[#465568] pt-3">
                                 <label
@@ -484,7 +590,7 @@ export default function App() {
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="task-modal-title"
-                  className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[#465568] bg-[#1D2733] p-6 shadow-2xl"
+                  className="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-[#465568] bg-[#1D2733] p-6 shadow-2xl"
               >
                 <div className="mb-6 flex items-center justify-between gap-4">
                   <h2
@@ -504,7 +610,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-5">
                   <div>
                     <label
                         htmlFor="task-title"
@@ -629,6 +735,90 @@ export default function App() {
                       />
                     </div>
                   </div>
+
+                  {/* M9: Task Context briefing. */}
+                  <section className="rounded-lg border border-[#465568] bg-[#121820]/60 p-4">
+                    <div className="mb-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-base font-semibold">
+                            Context briefing
+                          </h3>
+                          <p className="mt-1 text-sm text-[#B0BCCB]">
+                            Give your AI the background it needs to continue
+                            this task.
+                          </p>
+                        </div>
+
+                        <span className="rounded-md border border-[#A5B4FC]/40 bg-[#A5B4FC]/10 px-2 py-1 text-xs font-medium text-[#C7D2FE]">
+                      Markdown
+                    </span>
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <label
+                          htmlFor="task-context-tool"
+                          className="mb-1 block text-sm font-medium"
+                      >
+                        AI tool
+                        <span className="ml-2 font-normal text-[#B0BCCB]">
+                      Optional
+                    </span>
+                      </label>
+
+                      <select
+                          id="task-context-tool"
+                          name="contextTool"
+                          value={formData.contextTool}
+                          onChange={updateField}
+                          className="w-full rounded-md border border-[#465568] bg-[#121820] px-3 py-2 text-[#F1F5F9] outline-none focus:border-[#A5B4FC]"
+                      >
+                        <option value="">Select an AI tool...</option>
+                        {AI_TOOLS.map((tool) => (
+                            <option key={tool} value={tool}>
+                              {tool}
+                            </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                        <label
+                            htmlFor="task-context"
+                            className="block text-sm font-medium"
+                        >
+                          Context
+                        </label>
+
+                        <span
+                            className="text-xs text-[#B0BCCB]"
+                            aria-live="polite"
+                        >
+                      Last updated{' '}
+                          {getRelativeTime(formData.contextUpdatedAt)}
+                    </span>
+                      </div>
+
+                      <textarea
+                          id="task-context"
+                          name="context"
+                          value={formData.context}
+                          onChange={updateField}
+                          rows={9}
+                          spellCheck
+                          className="w-full resize-y rounded-md border border-[#465568] bg-[#121820] px-3 py-3 font-mono text-sm leading-6 text-[#F1F5F9] outline-none placeholder:text-[#7C8A9B] focus:border-[#A5B4FC]"
+                          placeholder={CONTEXT_TEMPLATE}
+                      />
+
+                      <p className="mt-2 text-xs leading-5 text-[#B0BCCB]">
+                        Include background, constraints, what you have tried,
+                        and what the AI should do next. Your context is saved
+                        when you save the task.
+                      </p>
+                    </div>
+                  </section>
 
                   <div className="flex flex-wrap justify-between gap-3 border-t border-[#465568] pt-4">
                     <div>
