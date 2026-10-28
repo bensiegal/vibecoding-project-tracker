@@ -258,6 +258,131 @@ function getRelativeTime(timestamp) {
   });
 }
 
+// M12: Project Pulse metrics.
+function getProjectPulse(tasks) {
+  const total = tasks.length;
+  const completed = tasks.filter((task) => task.status === 'done').length;
+  const unfinished = tasks.filter((task) => task.status !== 'done');
+  const today = getLocalDateString();
+
+  const overdue = unfinished.filter(
+      (task) => task.dueDate && task.dueDate < today
+  );
+
+  const dueSoon = unfinished.filter((task) => {
+    if (!task.dueDate) return false;
+
+    const daysUntilDue = Math.round(
+        (Date.parse(`${task.dueDate}T00:00:00Z`) -
+            Date.parse(`${today}T00:00:00Z`)) /
+        (1000 * 60 * 60 * 24)
+    );
+
+    return daysUntilDue >= 0 && daysUntilDue <= 3;
+  });
+
+  const byStage = STAGES.map((stage) => ({
+    ...stage,
+    count: tasks.filter((task) => task.status === stage.id).length,
+  }));
+
+  return {
+    total,
+    completed,
+    unfinished: unfinished.length,
+    overdue: overdue.length,
+    dueSoon: dueSoon.length,
+    completionPercent:
+        total === 0 ? 0 : Math.round((completed / total) * 100),
+    byStage,
+  };
+}
+
+// M12: Recommend an unfinished task using status and due-date priority.
+function getSmartNextStep(tasks) {
+  const today = getLocalDateString();
+  const unfinished = tasks.filter((task) => task.status !== 'done');
+
+  if (unfinished.length === 0) {
+    return {
+      task: null,
+      title: tasks.length ? 'You’re all caught up' : 'Start your project',
+      reason: tasks.length
+          ? 'Every task is marked as done. Review your deliverables or add the next task.'
+          : 'Add your first task to start building project momentum.',
+    };
+  }
+
+  function priority(task) {
+    if (task.dueDate && task.dueDate < today) return 0;
+
+    if (task.dueDate) {
+      const daysUntilDue = Math.round(
+          (Date.parse(`${task.dueDate}T00:00:00Z`) -
+              Date.parse(`${today}T00:00:00Z`)) /
+          (1000 * 60 * 60 * 24)
+      );
+
+      if (daysUntilDue === 0) return 1;
+      if (daysUntilDue <= 3) return 2;
+    }
+
+    if (task.status === 'in-progress') return 3;
+    if (task.status === 'review') return 4;
+    if (task.status === 'todo') return 5;
+
+    return 6;
+  }
+
+  const sorted = [...unfinished].sort((a, b) => {
+    const difference = priority(a) - priority(b);
+
+    if (difference !== 0) return difference;
+
+    if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) {
+      return a.dueDate.localeCompare(b.dueDate);
+    }
+
+    if (a.dueDate && !b.dueDate) return -1;
+    if (!a.dueDate && b.dueDate) return 1;
+
+    return (a.title || '').localeCompare(b.title || '');
+  });
+
+  const task = sorted[0];
+  let reason = 'This is the next unfinished task in your workflow.';
+
+  if (task.dueDate && task.dueDate < today) {
+    reason = 'This task is overdue, so it is the most urgent item to review.';
+  } else if (task.dueDate === today) {
+    reason = 'This task is due today. Prioritise it before lower-priority work.';
+  } else if (task.dueDate) {
+    const daysUntilDue = Math.round(
+        (Date.parse(`${task.dueDate}T00:00:00Z`) -
+            Date.parse(`${today}T00:00:00Z`)) /
+        (1000 * 60 * 60 * 24)
+    );
+
+    if (daysUntilDue <= 3) {
+      reason = 'This task is due soon, so it is worth prioritising.';
+    } else if (task.status === 'in-progress') {
+      reason = 'This task is already in progress. Finishing it can keep work moving.';
+    } else if (task.status === 'review') {
+      reason = 'This task is waiting for review. Resolve feedback or move it forward.';
+    }
+  } else if (task.status === 'in-progress') {
+    reason = 'This task is already in progress. Finishing it can keep work moving.';
+  } else if (task.status === 'review') {
+    reason = 'This task is waiting for review. Resolve feedback or move it forward.';
+  } else if (!task.context?.trim()) {
+    reason = 'Add a context briefing so the next AI handoff has useful background.';
+  } else if (!task.description?.trim()) {
+    reason = 'Add a short description so the task has a clear goal.';
+  }
+
+  return { task, title: task.title, reason };
+}
+
 /**
  * M10: Build a complete, portable prompt from a task.
  * This text can be pasted into an AI coding assistant.
@@ -361,6 +486,10 @@ export default function App() {
   };
 
   const [formData, setFormData] = useState(emptyForm);
+
+  // M12: Live dashboard metrics and task recommendation.
+  const projectPulse = getProjectPulse(tasks);
+  const smartNextStep = getSmartNextStep(tasks);
 
   function openNewTask() {
     setFormData({ ...emptyForm });
@@ -602,6 +731,120 @@ export default function App() {
         </header>
 
         <main>
+          {/* M12: Project Pulse and Smart Next Step */}
+          <section className="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            {/* Project Pulse */}
+            <div className="rounded-xl border border-[#465568] bg-[#1D2733] p-5 xl:col-span-2">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Project pulse</h2>
+                  <p className="mt-1 text-sm text-[#B0BCCB]">
+                    A quick overview of progress and work that needs attention.
+                  </p>
+                </div>
+
+                <span className="rounded-full border border-[#7DD3A7]/40 bg-[#7DD3A7]/10 px-3 py-1 text-sm font-semibold text-[#7DD3A7]">
+                  {projectPulse.completionPercent}% complete
+                </span>
+              </div>
+
+              <div
+                  className="mb-5 h-2 overflow-hidden rounded-full bg-[#283545]"
+                  role="progressbar"
+                  aria-label="Project completion"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={projectPulse.completionPercent}
+              >
+                <div
+                    className="h-full rounded-full bg-[#7DD3A7] transition-all"
+                    style={{ width: `${projectPulse.completionPercent}%` }}
+                />
+              </div>
+
+              <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-lg bg-[#283545] p-3">
+                  <p className="text-xs text-[#B0BCCB]">Total tasks</p>
+                  <p className="mt-1 text-2xl font-semibold">{projectPulse.total}</p>
+                </div>
+                <div className="rounded-lg bg-[#283545] p-3">
+                  <p className="text-xs text-[#B0BCCB]">Completed</p>
+                  <p className="mt-1 text-2xl font-semibold text-[#7DD3A7]">{projectPulse.completed}</p>
+                </div>
+                <div className="rounded-lg bg-[#283545] p-3">
+                  <p className="text-xs text-[#B0BCCB]">Still open</p>
+                  <p className="mt-1 text-2xl font-semibold">{projectPulse.unfinished}</p>
+                </div>
+                <div className="rounded-lg bg-[#283545] p-3">
+                  <p className="text-xs text-[#B0BCCB]">Overdue</p>
+                  <p className={`mt-1 text-2xl font-semibold ${projectPulse.overdue > 0 ? 'text-[#FDA4AF]' : 'text-[#F1F5F9]'}`}>
+                    {projectPulse.overdue}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Tasks by stage</h3>
+                  <span className="text-xs text-[#B0BCCB]">
+                    {projectPulse.dueSoon} due in the next 3 days
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {projectPulse.byStage.map((stage) => (
+                      <div key={stage.id} className="rounded-md border border-[#465568] px-3 py-2">
+                        <p className="text-xs text-[#B0BCCB]">{stage.label}</p>
+                        <p className="mt-1 text-lg font-semibold">{stage.count}</p>
+                      </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Smart Next Step */}
+            <div className="flex flex-col rounded-xl border border-[#A5B4FC]/40 bg-[#1D2733] p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#A5B4FC]/15 text-lg text-[#C7D2FE]" aria-hidden="true">✦</span>
+                <div>
+                  <h2 className="text-lg font-semibold">Smart next step</h2>
+                  <p className="text-xs text-[#B0BCCB]">A suggested task to focus on next</p>
+                </div>
+              </div>
+
+              {smartNextStep.task ? (
+                  <>
+                    <p className="mt-2 break-words text-base font-semibold">{smartNextStep.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#B0BCCB]">{smartNextStep.reason}</p>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-[#283545] px-2 py-1 text-xs text-[#F1F5F9]">
+                      {STAGES.find((stage) => stage.id === smartNextStep.task.status)?.label || smartNextStep.task.status}
+                    </span>
+                      {smartNextStep.task.dueDate && (
+                          <span className="rounded-md bg-[#283545] px-2 py-1 text-xs text-[#B0BCCB]">
+                        Due {new Date(`${smartNextStep.task.dueDate}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                      </span>
+                      )}
+                    </div>
+                    <button type="button" onClick={() => openEditTask(smartNextStep.task)} className="mt-auto pt-5 text-left text-sm font-semibold text-[#C7D2FE] underline underline-offset-4 hover:text-[#F1F5F9]">
+                      Review this task →
+                    </button>
+                  </>
+              ) : (
+                  <>
+                    <p className="mt-2 text-base font-semibold">{smartNextStep.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#B0BCCB]">{smartNextStep.reason}</p>
+                    <button type="button" onClick={openNewTask} className="mt-auto pt-5 text-left text-sm font-semibold text-[#C7D2FE] underline underline-offset-4 hover:text-[#F1F5F9]">
+                      + Add a task
+                    </button>
+                  </>
+              )}
+
+              <p className="mt-4 border-t border-[#465568] pt-3 text-xs leading-5 text-[#B0BCCB]">
+                Suggestions use task status and due dates first, then highlight work that may need more detail.
+              </p>
+            </div>
+          </section>
+
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Task board</h2>
@@ -875,63 +1118,63 @@ export default function App() {
                                   className="block w-full text-left"
                                   aria-label={`Edit task: ${task.title}`}
                               >
-                          <span className="block text-sm font-medium">
-                            {task.title}
-                          </span>
+                                <span className="block text-sm font-medium">
+                                  {task.title}
+                                </span>
 
                                 <span className="mt-2 block text-sm leading-5 text-[#B0BCCB]">
-                            {task.description || 'No description provided.'}
-                          </span>
+                                  {task.description || 'No description provided.'}
+                                </span>
 
                                 {/* M6: Feature and Bug badges. */}
                                 <span className="mt-3 flex items-center justify-between gap-2">
-                            <span
-                                className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
-                                    task.type === 'bug'
-                                        ? 'bg-[#FDA4AF] text-[#3A1820]'
-                                        : 'bg-[#C4B5FD] text-[#25203A]'
-                                }`}
-                            >
-                              {task.type === 'bug' ? 'BUG' : 'FEATURE'}
-                            </span>
+                                  <span
+                                      className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
+                                          task.type === 'bug'
+                                              ? 'bg-[#FDA4AF] text-[#3A1820]'
+                                              : 'bg-[#C4B5FD] text-[#25203A]'
+                                      }`}
+                                  >
+                                    {task.type === 'bug' ? 'BUG' : 'FEATURE'}
+                                  </span>
 
                                   {/* M7: Assignee badge. */}
                                   <span className="inline-flex items-center gap-1 rounded-md border border-[#465568] bg-[#1D2733] px-2 py-1 text-xs text-[#F1F5F9]">
-                              <span aria-hidden="true">👤</span>
+                                    <span aria-hidden="true">👤</span>
                                     {task.assignee || 'Unassigned'}
-                            </span>
-                          </span>
+                                  </span>
+                                </span>
                               </button>
 
                               {/* M8: Due-date label. */}
                               <div className="mt-3">
-                          <span
-                              className="inline-flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold"
-                              style={{
-                                backgroundColor: dueInfo.color,
-                                color: '#121820',
-                              }}
-                          >
-                            <span aria-hidden="true">
-                              {dueInfo.state === 'overdue'
-                                  ? '!'
-                                  : dueInfo.state === 'warning'
-                                      ? '◷'
-                                      : dueInfo.state === 'safe'
-                                          ? '✓'
-                                          : '—'}
-                            </span>
-                            {dueInfo.label}
-                          </span>
+                                <span
+                                    className="inline-flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold"
+                                    style={{
+                                      backgroundColor: dueInfo.color,
+                                      color: '#121820',
+                                    }}
+                                >
+                                  <span aria-hidden="true">
+                                    {dueInfo.state === 'overdue'
+                                        ? '!'
+                                        : dueInfo.state === 'warning'
+                                            ? '◷'
+                                            : dueInfo.state === 'safe'
+                                                ? '✓'
+                                                : '—'}
+                                  </span>
+                                  {dueInfo.label}
+                                </span>
                               </div>
 
                               {/* M9: Context indicator. */}
                               {task.context?.trim() && (
                                   <div className="mt-3">
-                            <span className="inline-flex items-center gap-1 rounded-md border border-[#A5B4FC]/40 bg-[#A5B4FC]/10 px-2 py-1 text-xs text-[#C7D2FE]">
-                              <span aria-hidden="true">✦</span>
-                              Context added
-                            </span>
+                                    <span className="inline-flex items-center gap-1 rounded-md border border-[#A5B4FC]/40 bg-[#A5B4FC]/10 px-2 py-1 text-xs text-[#C7D2FE]">
+                                      <span aria-hidden="true">✦</span>
+                                      Context added
+                                    </span>
                                   </div>
                               )}
 
