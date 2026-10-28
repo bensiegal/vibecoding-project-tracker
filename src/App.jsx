@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 
 /**
@@ -16,22 +15,6 @@ import { useState, useEffect } from 'react';
  * M12 secret-sauce
  */
 
-/**
- * @typedef {Object} Task
- * @property {string} id
- * @property {string} title
- * @property {string} description
- * @property {'feature'|'bug'} type
- * @property {'todo'|'in-progress'|'review'|'done'} status
- * @property {string} assignee
- * @property {string|null} dueDate
- * @property {string} createdDate
- * @property {string} context
- * @property {string} contextTool
- * @property {string|null} contextUpdatedAt
- */
-
-// The four columns of the board, in render order.
 export const STAGES = [
   { id: 'todo', label: 'To Do' },
   { id: 'in-progress', label: 'In Progress' },
@@ -39,7 +22,6 @@ export const STAGES = [
   { id: 'done', label: 'Done' },
 ];
 
-// This is a solo project, as specified in PRD §8.
 export const TEAM = ['Ben'];
 
 const AI_TOOLS = [
@@ -63,9 +45,16 @@ What have you already tried? What worked or failed?
 ## Pick up
 What should the AI do next?`;
 
-/**
- * A localStorage hook that persists data across reloads.
- */
+// M11: Categories for project deliverable links.
+const ANCHOR_TYPES = ['PRD', 'Design', 'Repository', 'Live demo', 'Other'];
+const INITIAL_ANCHORS = [];
+const EMPTY_ANCHOR_FORM = {
+  title: '',
+  url: '',
+  type: 'Other',
+  note: '',
+};
+
 export function useLocalStorage(key, initialValue) {
   const [value, setValue] = useState(() => {
     try {
@@ -80,14 +69,13 @@ export function useLocalStorage(key, initialValue) {
     try {
       window.localStorage.setItem(key, JSON.stringify(value));
     } catch {
-      // Quota or private-mode error — silently ignore for this prototype.
+      // Ignore localStorage errors in this prototype.
     }
   }, [key, value]);
 
   return [value, setValue];
 }
 
-// Seed the board with tasks so it isn't empty on first load.
 const INITIAL_TASKS = [
   {
     id: 'task-1',
@@ -143,7 +131,6 @@ const INITIAL_TASKS = [
   },
 ];
 
-// Return today's date using the local calendar.
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -152,7 +139,6 @@ function getLocalDateString(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-// Calculate the deadline state and its visual treatment.
 function getDueDateInfo(task) {
   const colors = {
     safe: '#7DD3FC',
@@ -170,13 +156,13 @@ function getDueDateInfo(task) {
   }
 
   const dueDate = new Date(`${task.dueDate}T00:00:00`);
+
   const formattedDate = dueDate.toLocaleDateString(undefined, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
 
-  // Completed tasks should not be shown as overdue.
   if (task.status === 'done') {
     return {
       state: 'neutral',
@@ -185,7 +171,6 @@ function getDueDateInfo(task) {
     };
   }
 
-  // Compare calendar dates rather than hours.
   const dueTimestamp = Date.parse(`${task.dueDate}T00:00:00Z`);
   const todayTimestamp = Date.parse(
       `${getLocalDateString()}T00:00:00Z`
@@ -228,7 +213,6 @@ function getDueDateInfo(task) {
   };
 }
 
-// M9: Format the last-updated timestamp as a relative time.
 function getRelativeTime(timestamp) {
   if (!timestamp) {
     return 'Not updated yet';
@@ -274,19 +258,96 @@ function getRelativeTime(timestamp) {
   });
 }
 
+/**
+ * M10: Build a complete, portable prompt from a task.
+ * This text can be pasted into an AI coding assistant.
+ */
+function buildTaskPrompt(task) {
+  const stageLabel =
+      STAGES.find((stage) => stage.id === task.status)?.label ||
+      task.status ||
+      'To Do';
+
+  const dueDate = task.dueDate || 'Not set';
+  const aiTool = task.contextTool || 'Not specified';
+
+  return `# Task: ${task.title || 'Untitled task'}
+
+## Task details
+- Type: ${task.type === 'bug' ? 'Bug' : 'Feature'}
+- Status: ${stageLabel}
+- Owner: ${task.assignee || 'Unassigned'}
+- Due date: ${dueDate}
+- Preferred AI tool: ${aiTool}
+
+## Description
+${task.description?.trim() || 'No description provided.'}
+
+## Context briefing
+${task.context?.trim() || 'No context briefing has been added yet.'}
+
+## Instructions
+Use the task details and context above to help with this task.
+Respect the stated constraints and review what has already been tried before suggesting changes.
+If important information is missing, ask clarifying questions rather than inventing project details.
+Explain your proposed changes and identify any relevant files before making broad changes.`;
+}
+
+/**
+ * Copy text using the Clipboard API where available, with a fallback.
+ */
+async function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.setAttribute('readonly', '');
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-9999px';
+
+  document.body.appendChild(textArea);
+  textArea.select();
+
+  let copied = false;
+
+  try {
+    copied = document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textArea);
+  }
+
+  if (!copied) {
+    throw new Error('Clipboard access was unavailable.');
+  }
+}
+
 export default function App() {
-  // M4: Persist tasks in localStorage.
-  // Keep this key unchanged so existing tasks are preserved.
+  // Keep the existing storage key to preserve saved tasks.
   const [tasks, setTasks] = useLocalStorage(
       'vibetracker.tasks',
       INITIAL_TASKS
   );
 
-  // M5: null means the modal is closed.
-  // An object with id: null means we're creating a task.
+  // M11: Deliverables use their own storage key, separate from tasks.
+  const [anchors, setAnchors] = useLocalStorage(
+      'vibetracker.anchors',
+      INITIAL_ANCHORS
+  );
+  const [anchorFormOpen, setAnchorFormOpen] = useState(false);
+  const [editingAnchorId, setEditingAnchorId] = useState(null);
+  const [anchorForm, setAnchorForm] = useState({ ...EMPTY_ANCHOR_FORM });
+  const [anchorError, setAnchorError] = useState('');
+
   const [editing, setEditing] = useState(null);
 
-  // M9: New tasks start with a context briefing template.
+  // M10: Feedback for copy actions.
+  const [copiedTaskId, setCopiedTaskId] = useState(null);
+  const [copyErrorTaskId, setCopyErrorTaskId] = useState(null);
+  const [modalCopyMessage, setModalCopyMessage] = useState('');
+
   const emptyForm = {
     title: '',
     description: '',
@@ -303,6 +364,7 @@ export default function App() {
 
   function openNewTask() {
     setFormData({ ...emptyForm });
+    setModalCopyMessage('');
     setEditing({ id: null });
   }
 
@@ -319,11 +381,13 @@ export default function App() {
       contextUpdatedAt: task.contextUpdatedAt || null,
     });
 
+    setModalCopyMessage('');
     setEditing(task);
   }
 
   function closeModal() {
     setEditing(null);
+    setModalCopyMessage('');
   }
 
   function handleSubmit(event) {
@@ -380,7 +444,6 @@ export default function App() {
     closeModal();
   }
 
-  // M9: Editing the Context field automatically updates its timestamp.
   function updateField(event) {
     const { name, value } = event.target;
 
@@ -391,9 +454,10 @@ export default function App() {
           ? { contextUpdatedAt: new Date().toISOString() }
           : {}),
     }));
+
+    setModalCopyMessage('');
   }
 
-  // M7: Hand off a task without opening the edit modal.
   function handleAssigneeChange(taskId, newAssignee) {
     setTasks((currentTasks) =>
         currentTasks.map((task) =>
@@ -404,13 +468,136 @@ export default function App() {
     );
   }
 
+  // M11: Create, edit and delete project deliverable anchors.
+  function openNewAnchor() {
+    setAnchorForm({ ...EMPTY_ANCHOR_FORM });
+    setEditingAnchorId(null);
+    setAnchorError('');
+    setAnchorFormOpen(true);
+  }
+
+  function openEditAnchor(anchor) {
+    setAnchorForm({
+      title: anchor.title || '',
+      url: anchor.url || '',
+      type: anchor.type || 'Other',
+      note: anchor.note || '',
+    });
+    setEditingAnchorId(anchor.id);
+    setAnchorError('');
+    setAnchorFormOpen(true);
+  }
+
+  function closeAnchorForm() {
+    setAnchorFormOpen(false);
+    setEditingAnchorId(null);
+    setAnchorForm({ ...EMPTY_ANCHOR_FORM });
+    setAnchorError('');
+  }
+
+  function handleAnchorSubmit(event) {
+    event.preventDefault();
+
+    const title = anchorForm.title.trim();
+    const rawUrl = anchorForm.url.trim();
+
+    if (!title || !rawUrl) {
+      setAnchorError('Add both a title and a URL.');
+      return;
+    }
+
+    let parsedUrl;
+
+    try {
+      parsedUrl = new URL(rawUrl);
+    } catch {
+      setAnchorError('Enter a valid URL, including https:// or http://.');
+      return;
+    }
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      setAnchorError('Only http:// and https:// links are supported.');
+      return;
+    }
+
+    const savedAnchor = {
+      id: editingAnchorId || `anchor-${Date.now()}`,
+      title,
+      url: parsedUrl.href,
+      type: ANCHOR_TYPES.includes(anchorForm.type)
+          ? anchorForm.type
+          : 'Other',
+      note: anchorForm.note.trim(),
+    };
+
+    setAnchors((currentAnchors) =>
+        editingAnchorId
+            ? currentAnchors.map((anchor) =>
+                anchor.id === editingAnchorId ? savedAnchor : anchor
+            )
+            : [...currentAnchors, savedAnchor]
+    );
+
+    closeAnchorForm();
+  }
+
+  function deleteAnchor(anchorId) {
+    const confirmed = window.confirm(
+        'Delete this deliverable link? This cannot be undone.'
+    );
+
+    if (!confirmed) return;
+
+    setAnchors((currentAnchors) =>
+        currentAnchors.filter((anchor) => anchor.id !== anchorId)
+    );
+
+    if (editingAnchorId === anchorId) closeAnchorForm();
+  }
+
+  // M10: Copy a saved task's complete briefing.
+  async function handleCopyTaskContext(task) {
+    setCopiedTaskId(null);
+    setCopyErrorTaskId(null);
+
+    try {
+      await copyToClipboard(buildTaskPrompt(task));
+      setCopiedTaskId(task.id);
+    } catch (error) {
+      console.error('Unable to copy task context:', error);
+      setCopyErrorTaskId(task.id);
+    }
+  }
+
+  // M10: Copy the current editor contents, including unsaved changes.
+  async function handleCopyEditorContext() {
+    setModalCopyMessage('');
+
+    const taskForPrompt = {
+      ...formData,
+      id: editing?.id ?? null,
+      title: formData.title.trim() || 'Untitled task',
+      dueDate: formData.dueDate || null,
+    };
+
+    try {
+      await copyToClipboard(buildTaskPrompt(taskForPrompt));
+      setModalCopyMessage('Copied! Paste it into your AI tool.');
+    } catch (error) {
+      console.error('Unable to copy editor context:', error);
+      setModalCopyMessage(
+          'Copy failed. Check your browser clipboard permissions.'
+      );
+    }
+  }
+
   return (
       <div className="min-h-screen bg-[#121820] p-6 text-[#F1F5F9]">
         <header className="mb-8">
           <h1 className="text-2xl font-bold">My project</h1>
           <p className="mt-2 text-sm text-[#B0BCCB]">
-            Keep development tasks, AI context and project
-            deliverables together in one workspace.
+            Keep development tasks, AI context and project deliverables together
+            in one workspace.
           </p>
         </header>
 
@@ -432,7 +619,222 @@ export default function App() {
             </button>
           </div>
 
-          {/* TODO M11 anchors: render the Anchor Board above the Kanban. */}
+          {/* M11: Project deliverables */}
+          <section className="mb-8 rounded-xl border border-[#465568] bg-[#1D2733] p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Project deliverables</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-5 text-[#B0BCCB]">
+                  Keep important project links in one place — your PRD, design,
+                  repository and live demo.
+                </p>
+              </div>
+
+              <button
+                  type="button"
+                  onClick={anchorFormOpen ? closeAnchorForm : openNewAnchor}
+                  className="rounded-md bg-[#7DD3A7] px-3 py-2 text-sm font-semibold text-[#121820] hover:opacity-90"
+              >
+                {anchorFormOpen ? 'Cancel' : '+ Add deliverable'}
+              </button>
+            </div>
+
+            {anchorFormOpen && (
+                <form
+                    onSubmit={handleAnchorSubmit}
+                    className="mb-4 space-y-4 rounded-lg border border-[#465568] bg-[#121820] p-4"
+                >
+                  <h3 className="font-semibold">
+                    {editingAnchorId ? 'Edit deliverable' : 'Add a deliverable'}
+                  </h3>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label
+                          htmlFor="anchor-title"
+                          className="mb-1 block text-sm font-medium"
+                      >
+                        Title *
+                      </label>
+                      <input
+                          id="anchor-title"
+                          value={anchorForm.title}
+                          onChange={(event) =>
+                              setAnchorForm((current) => ({
+                                ...current,
+                                title: event.target.value,
+                              }))
+                          }
+                          required
+                          maxLength={100}
+                          placeholder="e.g. Project requirements"
+                          className="w-full rounded-md border border-[#465568] bg-[#1D2733] px-3 py-2 text-sm text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                          htmlFor="anchor-type"
+                          className="mb-1 block text-sm font-medium"
+                      >
+                        Type
+                      </label>
+                      <select
+                          id="anchor-type"
+                          value={anchorForm.type}
+                          onChange={(event) =>
+                              setAnchorForm((current) => ({
+                                ...current,
+                                type: event.target.value,
+                              }))
+                          }
+                          className="w-full rounded-md border border-[#465568] bg-[#1D2733] px-3 py-2 text-sm text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
+                      >
+                        {ANCHOR_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {type}
+                            </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                        htmlFor="anchor-url"
+                        className="mb-1 block text-sm font-medium"
+                    >
+                      URL *
+                    </label>
+                    <input
+                        id="anchor-url"
+                        type="url"
+                        value={anchorForm.url}
+                        onChange={(event) =>
+                            setAnchorForm((current) => ({
+                              ...current,
+                              url: event.target.value,
+                            }))
+                        }
+                        required
+                        placeholder="https://..."
+                        className="w-full rounded-md border border-[#465568] bg-[#1D2733] px-3 py-2 text-sm text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                        htmlFor="anchor-note"
+                        className="mb-1 block text-sm font-medium"
+                    >
+                      Note{' '}
+                      <span className="font-normal text-[#B0BCCB]">
+                    (optional)
+                  </span>
+                    </label>
+                    <input
+                        id="anchor-note"
+                        value={anchorForm.note}
+                        onChange={(event) =>
+                            setAnchorForm((current) => ({
+                              ...current,
+                              note: event.target.value,
+                            }))
+                        }
+                        maxLength={200}
+                        placeholder="What is this deliverable for?"
+                        className="w-full rounded-md border border-[#465568] bg-[#1D2733] px-3 py-2 text-sm text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
+                    />
+                  </div>
+
+                  {anchorError && (
+                      <p className="text-sm text-[#FDA4AF]" role="alert">
+                        {anchorError}
+                      </p>
+                  )}
+
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={closeAnchorForm}
+                        className="rounded-md border border-[#465568] px-3 py-2 text-sm hover:bg-[#283545]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        className="rounded-md bg-[#7DD3A7] px-4 py-2 text-sm font-semibold text-[#121820] hover:opacity-90"
+                    >
+                      {editingAnchorId ? 'Save changes' : 'Save deliverable'}
+                    </button>
+                  </div>
+                </form>
+            )}
+
+            {anchors.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#465568] px-4 py-6 text-center">
+                  <p className="text-sm font-medium text-[#F1F5F9]">
+                    No deliverables pinned yet
+                  </p>
+                  <p className="mt-1 text-sm text-[#B0BCCB]">
+                    Add a link to your PRD, design, GitHub repository or deployed
+                    app.
+                  </p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {anchors.map((anchor) => (
+                      <article
+                          key={anchor.id}
+                          className="flex min-w-0 flex-col rounded-lg border border-[#465568] bg-[#283545] p-4"
+                      >
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                    <span className="rounded-md border border-[#A5B4FC]/40 bg-[#A5B4FC]/10 px-2 py-1 text-xs font-medium text-[#C7D2FE]">
+                      {anchor.type}
+                    </span>
+
+                          <div className="flex shrink-0 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => openEditAnchor(anchor)}
+                                className="text-xs text-[#B0BCCB] underline underline-offset-2 hover:text-[#7DD3A7]"
+                            >
+                              Edit
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => deleteAnchor(anchor.id)}
+                                className="text-xs text-[#FDA4AF] underline underline-offset-2 hover:opacity-80"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        <h3 className="break-words font-semibold">{anchor.title}</h3>
+
+                        {anchor.note && (
+                            <p className="mt-1 break-words text-sm leading-5 text-[#B0BCCB]">
+                              {anchor.note}
+                            </p>
+                        )}
+
+                        <a
+                            href={anchor.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 inline-flex max-w-full items-center gap-2 break-all text-sm font-medium text-[#7DD3A7] underline underline-offset-2 hover:opacity-80"
+                        >
+                          <span className="break-all">{anchor.url}</span>
+                          <span aria-hidden="true" className="shrink-0">
+                      ↗
+                    </span>
+                        </a>
+                      </article>
+                  ))}
+                </div>
+            )}
+          </section>
 
           {/* M4: Render the four task columns. */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -455,7 +857,6 @@ export default function App() {
 
                     <div className="space-y-3">
                       {stageTasks.map((task) => {
-                        // M8: Calculate the deadline styling for this card.
                         const dueInfo = getDueDateInfo(task);
 
                         return (
@@ -467,7 +868,7 @@ export default function App() {
                                   borderLeftColor: dueInfo.color,
                                 }}
                             >
-                              {/* M5: Click task details to edit the task. */}
+                              {/* Click the task details to edit it. */}
                               <button
                                   type="button"
                                   onClick={() => openEditTask(task)}
@@ -479,8 +880,7 @@ export default function App() {
                           </span>
 
                                 <span className="mt-2 block text-sm leading-5 text-[#B0BCCB]">
-                            {task.description ||
-                                'No description provided.'}
+                            {task.description || 'No description provided.'}
                           </span>
 
                                 {/* M6: Feature and Bug badges. */}
@@ -503,7 +903,7 @@ export default function App() {
                           </span>
                               </button>
 
-                              {/* M8: Due-date label with state colour. */}
+                              {/* M8: Due-date label. */}
                               <div className="mt-3">
                           <span
                               className="inline-flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold"
@@ -525,7 +925,7 @@ export default function App() {
                           </span>
                               </div>
 
-                              {/* M9: Show whether the task has a context briefing. */}
+                              {/* M9: Context indicator. */}
                               {task.context?.trim() && (
                                   <div className="mt-3">
                             <span className="inline-flex items-center gap-1 rounded-md border border-[#A5B4FC]/40 bg-[#A5B4FC]/10 px-2 py-1 text-xs text-[#C7D2FE]">
@@ -535,7 +935,41 @@ export default function App() {
                                   </div>
                               )}
 
-                              {/* M7: Hand off to another team member. */}
+                              {/* M10: Copy the complete task prompt. */}
+                              <div className="mt-3">
+                                <button
+                                    type="button"
+                                    onClick={() => handleCopyTaskContext(task)}
+                                    className="w-full rounded-md border border-[#A5B4FC]/60 px-3 py-2 text-sm font-medium text-[#C7D2FE] hover:bg-[#A5B4FC]/10"
+                                >
+                                  {copiedTaskId === task.id
+                                      ? '✓ Copied!'
+                                      : copyErrorTaskId === task.id
+                                          ? 'Copy failed — try again'
+                                          : 'Copy context'}
+                                </button>
+
+                                {copiedTaskId === task.id && (
+                                    <p
+                                        className="mt-1 text-xs text-[#7DD3A7]"
+                                        role="status"
+                                    >
+                                      Ready to paste into your AI tool.
+                                    </p>
+                                )}
+
+                                {copyErrorTaskId === task.id && (
+                                    <p
+                                        className="mt-1 text-xs text-[#FDA4AF]"
+                                        role="status"
+                                    >
+                                      Clipboard access failed. Check browser
+                                      permissions and try again.
+                                    </p>
+                                )}
+                              </div>
+
+                              {/* M7: Hand off to a team member. */}
                               <div className="mt-3 border-t border-[#465568] pt-3">
                                 <label
                                     htmlFor={`assignee-${task.id}`}
@@ -548,10 +982,7 @@ export default function App() {
                                     id={`assignee-${task.id}`}
                                     value={task.assignee || ''}
                                     onChange={(event) =>
-                                        handleAssigneeChange(
-                                            task.id,
-                                            event.target.value
-                                        )
+                                        handleAssigneeChange(task.id, event.target.value)
                                     }
                                     className="w-full rounded-md border border-[#465568] bg-[#121820] px-2 py-2 text-sm text-[#F1F5F9] outline-none focus:border-[#7DD3A7]"
                                 >
@@ -593,10 +1024,7 @@ export default function App() {
                   className="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-[#465568] bg-[#1D2733] p-6 shadow-2xl"
               >
                 <div className="mb-6 flex items-center justify-between gap-4">
-                  <h2
-                      id="task-modal-title"
-                      className="text-xl font-semibold"
-                  >
+                  <h2 id="task-modal-title" className="text-xl font-semibold">
                     {editing.id === null ? 'New task' : 'Edit task'}
                   </h2>
 
@@ -745,8 +1173,8 @@ export default function App() {
                             Context briefing
                           </h3>
                           <p className="mt-1 text-sm text-[#B0BCCB]">
-                            Give your AI the background it needs to continue
-                            this task.
+                            Give your AI the background it needs to continue this
+                            task.
                           </p>
                         </div>
 
@@ -796,8 +1224,7 @@ export default function App() {
                             className="text-xs text-[#B0BCCB]"
                             aria-live="polite"
                         >
-                      Last updated{' '}
-                          {getRelativeTime(formData.contextUpdatedAt)}
+                      Last updated {getRelativeTime(formData.contextUpdatedAt)}
                     </span>
                       </div>
 
@@ -813,12 +1240,45 @@ export default function App() {
                       />
 
                       <p className="mt-2 text-xs leading-5 text-[#B0BCCB]">
-                        Include background, constraints, what you have tried,
-                        and what the AI should do next. Your context is saved
-                        when you save the task.
+                        Include background, constraints, what you have tried, and
+                        what the AI should do next. Your context is saved when you
+                        save the task.
                       </p>
                     </div>
                   </section>
+
+                  {/* M10: Copy the current form, even before saving. */}
+                  <div className="rounded-lg border border-[#A5B4FC]/30 bg-[#A5B4FC]/5 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">Ready to work with AI?</p>
+                        <p className="mt-1 text-xs text-[#B0BCCB]">
+                          Copy the task details and context into your AI tool.
+                        </p>
+                      </div>
+
+                      <button
+                          type="button"
+                          onClick={handleCopyEditorContext}
+                          className="rounded-md border border-[#A5B4FC]/60 px-3 py-2 text-sm font-medium text-[#C7D2FE] hover:bg-[#A5B4FC]/10"
+                      >
+                        Copy context
+                      </button>
+                    </div>
+
+                    {modalCopyMessage && (
+                        <p
+                            className={`mt-2 text-sm ${
+                                modalCopyMessage.startsWith('Copied')
+                                    ? 'text-[#7DD3A7]'
+                                    : 'text-[#FDA4AF]'
+                            }`}
+                            role="status"
+                        >
+                          {modalCopyMessage}
+                        </p>
+                    )}
+                  </div>
 
                   <div className="flex flex-wrap justify-between gap-3 border-t border-[#465568] pt-4">
                     <div>
