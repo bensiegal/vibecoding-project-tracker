@@ -449,7 +449,117 @@ async function copyToClipboard(text) {
   }
 }
 
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    onLogin(email.trim() || 'Guest');
+  }
+
+  return (
+      <div className="flex min-h-screen items-center justify-center bg-[#121820] px-4 py-10 text-[#F1F5F9]">
+        <div className="grid w-full max-w-5xl overflow-hidden rounded-2xl border border-[#465568] bg-[#1D2733] shadow-2xl md:grid-cols-2">
+          <div className="flex flex-col justify-between bg-[#17212B] p-8 md:p-10">
+            <div>
+              <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-xl bg-[#7DD3A7] text-2xl font-black text-[#121820]">
+                V
+              </div>
+              <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-[#7DD3A7]">
+                Vibecoding Project Tracker
+              </p>
+              <h1 className="max-w-sm text-3xl font-bold leading-tight sm:text-4xl">
+                Turn your next idea into progress.
+              </h1>
+              <p className="mt-4 max-w-sm leading-7 text-[#B0BCCB]">
+                Keep tasks, AI context and project deliverables together in one workspace.
+              </p>
+            </div>
+            <div className="mt-12 grid grid-cols-3 gap-3">
+              <div className="rounded-lg border border-[#465568] bg-[#1D2733] p-3">
+                <div className="mb-2 h-2 w-8 rounded-full bg-[#7DD3A7]" />
+                <p className="text-xs text-[#B0BCCB]">Track work</p>
+              </div>
+              <div className="rounded-lg border border-[#465568] bg-[#1D2733] p-3">
+                <div className="mb-2 h-2 w-8 rounded-full bg-[#A5B4FC]" />
+                <p className="text-xs text-[#B0BCCB]">Keep context</p>
+              </div>
+              <div className="rounded-lg border border-[#465568] bg-[#1D2733] p-3">
+                <div className="mb-2 h-2 w-8 rounded-full bg-[#7DD3FC]" />
+                <p className="text-xs text-[#B0BCCB]">Ship work</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-8 md:p-10">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold">Welcome back</h2>
+              <p className="mt-2 text-sm text-[#B0BCCB]">
+                Sign in to open your project workspace.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <label htmlFor="demo-email" className="mb-2 block text-sm font-medium text-[#F1F5F9]">
+                Email address
+              </label>
+              <input
+                  id="demo-email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className="mb-5 w-full rounded-lg border border-[#465568] bg-[#121820] px-4 py-3 text-[#F1F5F9] outline-none transition placeholder:text-[#718096] focus:border-[#7DD3A7] focus:ring-2 focus:ring-[#7DD3A7]/20"
+              />
+
+              <label htmlFor="demo-password" className="mb-2 block text-sm font-medium text-[#F1F5F9]">
+                Password
+              </label>
+              <input
+                  id="demo-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Enter any password"
+                  className="w-full rounded-lg border border-[#465568] bg-[#121820] px-4 py-3 text-[#F1F5F9] outline-none transition placeholder:text-[#718096] focus:border-[#7DD3A7] focus:ring-2 focus:ring-[#7DD3A7]/20"
+              />
+
+              <button
+                  type="submit"
+                  className="mt-6 w-full rounded-lg bg-[#7DD3A7] px-4 py-3 font-semibold text-[#121820] transition hover:bg-[#9AE2BC] focus:outline-none focus:ring-2 focus:ring-[#7DD3A7] focus:ring-offset-2 focus:ring-offset-[#1D2733]"
+              >
+                Sign in to tracker <span aria-hidden="true">→</span>
+              </button>
+            </form>
+
+            <div className="my-5 flex items-center gap-3 text-xs text-[#718096]">
+              <div className="h-px flex-1 bg-[#465568]" />
+              OR
+              <div className="h-px flex-1 bg-[#465568]" />
+            </div>
+
+            <button
+                type="button"
+                onClick={() => onLogin('Guest')}
+                className="w-full rounded-lg border border-[#465568] px-4 py-3 font-medium text-[#F1F5F9] transition hover:border-[#7DD3A7] hover:bg-[#283545]"
+            >
+              Continue as guest
+            </button>
+
+            <p className="mt-6 text-center text-xs leading-5 text-[#718096]">
+              Demo sign-in only. No account, password or server validation is used.
+            </p>
+          </div>
+        </div>
+      </div>
+  );
+}
+
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+
   // Keep the existing storage key to preserve saved tasks.
   const [tasks, setTasks] = useLocalStorage(
       'vibetracker.tasks',
@@ -720,14 +830,39 @@ export default function App() {
     }
   }
 
+  if (!isLoggedIn) {
+    return (
+        <LoginScreen
+            onLogin={(email) => {
+              setLoginEmail(email || 'Guest');
+              setIsLoggedIn(true);
+            }}
+        />
+    );
+  }
+
   return (
       <div className="min-h-screen bg-[#121820] p-6 text-[#F1F5F9]">
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold">My project</h1>
-          <p className="mt-2 text-sm text-[#B0BCCB]">
-            Keep development tasks, AI context and project deliverables together
-            in one workspace.
-          </p>
+        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">My project</h1>
+            <p className="mt-2 text-sm text-[#B0BCCB]">
+              Keep development tasks, AI context and project deliverables together
+              in one workspace.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-[#B0BCCB]">
+              Signed in as <span className="font-medium text-[#F1F5F9]">{loginEmail || 'Guest'}</span>
+            </span>
+            <button
+                type="button"
+                onClick={() => setIsLoggedIn(false)}
+                className="rounded-lg border border-[#465568] px-3 py-2 text-sm font-medium text-[#F1F5F9] transition hover:bg-[#283545]"
+            >
+              Sign out
+            </button>
+          </div>
         </header>
 
         <main>
